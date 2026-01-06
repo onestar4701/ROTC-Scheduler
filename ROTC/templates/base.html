@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ROTC 근무표 관리</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <nav>
+                <a href="{{ url_for('index') }}" class="logo">ROTC Scheduler</a>
+                <div class="nav-links">
+                    <a href="{{ url_for('people_list') }}">인원 관리</a>
+                    <a href="{{ url_for('roster_list') }}">근무표 관리</a>
+                    <a href="{{ url_for('history') }}">통계/기록</a>
+                    {% if current_user.is_authenticated %}
+                    {% if current_user.role == 'admin' %}
+                    <a href="{{ url_for('admin_page') }}" style="color: #ef4444; font-weight: bold;">관리자 페이지</a>
+                    {% endif %}
+                    <span style="font-size: 0.9rem; margin-left: 10px; color: #64748b;">{{ current_user.name }}님</span>
+                    <a href="{{ url_for('logout') }}" class="btn btn-secondary"
+                        style="margin-left: 5px; padding: 4px 8px; font-size: 0.8rem;">로그아웃</a>
+                    {% else %}
+                    <a href="{{ url_for('login') }}" class="btn btn-primary"
+                        style="margin-left: 10px; padding: 4px 8px; font-size: 0.8rem;">로그인</a>
+                    <a href="{{ url_for('signup') }}" class="btn btn-secondary"
+                        style="margin-left: 5px; padding: 4px 8px; font-size: 0.8rem;">회원가입</a>
+                    {% endif %}
+                </div>
+            </nav>
+        </header>
+
+        <main>
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+
+</html>
