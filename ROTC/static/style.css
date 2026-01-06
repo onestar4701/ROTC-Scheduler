@@ -1,0 +1,306 @@
+:root {
+    --primary-color: #2563eb;
+    --primary-hover: #1d4ed8;
+    --bg-color: #f8fafc;
+    --card-bg: #ffffff;
+    --text-main: #1e293b;
+    --text-muted: #64748b;
+    --border-color: #e2e8f0;
+    --success: #10b981;
+    --danger: #ef4444;
+    --warning: #f59e0b;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-main);
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 98%;
+    /* Full width layout */
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* Header */
+header {
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--border-color);
+    padding: 1rem 0;
+    margin-bottom: 2rem;
+}
+
+nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.logo {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    text-decoration: none;
+}
+
+.nav-links a {
+    margin-left: 20px;
+    text-decoration: none;
+    color: var(--text-muted);
+    font-weight: 500;
+    transition: color 0.2s;
+}
+
+.nav-links a:hover {
+    color: var(--primary-color);
+}
+
+/* Cards */
+.card {
+    background: var(--card-bg);
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    padding: 24px;
+    margin-bottom: 20px;
+}
+
+.btn {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: background 0.2s;
+}
+
+.btn-primary {
+    background: var(--primary-color);
+    color: white;
+}
+
+.btn-primary:hover {
+    background: var(--primary-hover);
+}
+
+.btn-danger {
+    background: var(--danger);
+    color: white;
+}
+
+/* Grid & Utilities */
+.grid {
+    display: grid;
+    gap: 20px;
+}
+
+.grid-cols-2 {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.grid-cols-3 {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.grid-cols-4 {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+/* Visual Grid Styles */
+.time-grid {
+    display: grid;
+    grid-template-columns: 60px repeat(7, 1fr);
+    /* Time label + 7 Days */
+    gap: 1px;
+    background: #e2e8f0;
+    border: 1px solid #cbd5e1;
+    user-select: none;
+}
+
+.grid-header {
+    background: #f8fafc;
+    padding: 10px;
+    text-align: center;
+    font-weight: bold;
+    border-bottom: 1px solid #cbd5e1;
+}
+
+.time-label {
+    background: #f8fafc;
+    padding: 5px;
+    text-align: right;
+    font-size: 0.8rem;
+    color: #64748b;
+    border-right: 1px solid #cbd5e1;
+}
+
+.grid-cell {
+    background: white;
+    height: 30px;
+    /* 30 mins or 1 hour slot */
+    cursor: pointer;
+    transition: background 0.1s;
+}
+
+.grid-cell:hover {
+    background: #f1f5f9;
+}
+
+.grid-cell.selected {
+    background: #4ade80;
+    /* Green */
+}
+
+/* Tabs */
+.tab-nav {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 10px;
+}
+
+.tab-btn {
+    padding: 10px 20px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-weight: 500;
+    color: #64748b;
+    border-radius: 6px;
+    font-size: 1rem;
+}
+
+.tab-btn:hover {
+    background: #f1f5f9;
+}
+
+.tab-btn.active {
+    background: #e2e8f0;
+    color: #1e293b;
+    font-weight: bold;
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* Drag and Drop Roster */
+.roster-board {
+    display: flex;
+    gap: 20px;
+    /* height: 80vh; Removed to allow full expansion */
+    align-items: flex-start;
+    /* Align to top */
+}
+
+.person-list {
+    width: 250px;
+    background: #f8fafc;
+    padding: 15px;
+    border-radius: 8px;
+    /* overflow-y: auto; Removed to allow full expansion */
+    flex-shrink: 0;
+    /* Prevent shrinking */
+}
+
+.person-card {
+    background: white;
+    padding: 10px;
+    margin-bottom: 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    cursor: pointer;
+    /* Changed from grab to pointer */
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s;
+}
+
+.person-card:hover {
+    background: #f1f5f9;
+}
+
+.person-card.selected {
+    border-color: var(--primary-color);
+    background: #eff6ff;
+    box-shadow: 0 0 0 2px var(--primary-color);
+}
+
+.roster-calendar {
+    flex-grow: 1;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 15px;
+    overflow-y: auto;
+}
+
+.day-column {
+    background: white;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 10px;
+    min-height: 200px;
+}
+
+.day-header {
+    font-weight: bold;
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: space-between;
+}
+
+.drop-zone {
+    /* min-height: 150px; Removed for table grid compatibility */
+    background: #f8fafc;
+    /* border-radius: 4px; Removed for table grid */
+    /* padding: 5px; Removed for table grid */
+    height: 100%;
+}
+
+.drop-zone.drag-over {
+    background: #dbeafe;
+    /* border: 2px dashed #3b82f6; Removed to avoid layout shift */
+    outline: 2px dashed #3b82f6;
+    outline-offset: -2px;
+}
+
+/* Roster Table (Legacy/Fallback) */
+.roster-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.roster-table th,
+.roster-table td {
+    border: 1px solid var(--border-color);
+    padding: 12px;
+    text-align: center;
+    white-space: nowrap;
+    /* Prevent wrapping */
+}
+
+.roster-table th {
+    background: #f1f5f9;
+}
+
+.unassigned {
+    background-color: #fee2e2;
+    color: var(--danger);
+    font-weight: bold;
+}

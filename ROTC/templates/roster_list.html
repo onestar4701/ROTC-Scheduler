@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="card">
+    <h2>근무표 관리</h2>
+
+    <!-- Create Roster Form (Admin Only) -->
+    {% if current_user.role == 'admin' %}
+    <form action="{{ url_for('create_roster') }}" method="POST"
+        style="margin: 20px 0; padding: 20px; background: #f8fafc; border-radius: 8px;">
+        <h3>새 행사/근무표 생성</h3>
+        <div class="grid grid-cols-3" style="gap: 15px;">
+            <div>
+                <label>제목</label>
+                <input type="text" name="title" placeholder="예: 2025년 12월 근무표" required
+                    style="width: 100%; padding: 8px; margin-top: 5px;">
+            </div>
+            <div>
+                <label>시작일</label>
+                <input type="date" name="start_date" required style="width: 100%; padding: 8px; margin-top: 5px;">
+            </div>
+            <div>
+                <label>종료일</label>
+                <input type="date" name="end_date" required style="width: 100%; padding: 8px; margin-top: 5px;">
+            </div>
+            <div>
+                <label>시간당 근무 인원 (선택사항)</label>
+                <input type="number" name="people_per_shift" placeholder="비워두면 전원 배정" min="1"
+                    style="width: 100%; padding: 8px; margin-top: 5px;">
+            </div>
+        </div>
+        <button type="submit" class="btn btn-primary" style="margin-top: 15px;">생성하기</button>
+    </form>
+    {% endif %}
+
+    <!-- Roster List -->
+    <div class="grid grid-cols-2">
+        {% for roster in rosters %}
+        <div class="card" style="border: 1px solid var(--border-color);">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                <div>
+                    <h3>{{ roster.title }}</h3>
+                    <p style="color: var(--text-muted); font-size: 0.9rem;">
+                        {{ roster.start_date.strftime('%Y-%m-%d') }} ~ {{ roster.end_date.strftime('%Y-%m-%d') }}
+                    </p>
+                </div>
+                {% if current_user.role == 'admin' %}
+                <form action="{{ url_for('delete_roster', id=roster.id) }}" method="POST"
+                    onsubmit="return confirm('삭제하시겠습니까?');">
+                    <button type="submit" class="btn btn-danger" style="font-size: 0.8rem;">삭제</button>
+                </form>
+                {% endif %}
+            </div>
+            <div style="margin-top: 15px;">
+                <a href="{{ url_for('roster_detail', id=roster.id) }}" class="btn btn-primary"
+                    style="width: 100%; text-align: center;">관리 / 배정</a>
+            </div>
+        </div>
+        {% else %}
+        <p>생성된 근무표가 없습니다.</p>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
