@@ -1,0 +1,732 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="card" style="min-height: 90vh; display: flex; flex-direction: column;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <div>
+            <h2 style="margin-bottom: 5px;">{{ roster.title }}</h2>
+            {% if roster.event_time %}
+            <p style="color: var(--text-muted); font-size: 0.9rem; margin: 0;">행사 시간: {{ roster.event_time }}</p>
+            {% endif %}
+        </div>
+        <div style="display: flex; gap: 10px;">
+            {% if current_user.role == 'admin' %}
+            <form action="{{ url_for('apply_stats', id=roster.id) }}" method="POST" style="display: inline;">
+                <button type="submit" class="btn btn-primary">적용</button>
+            </form>
+            <a href="{{ url_for('roster_capacity', id=roster.id) }}" class="btn btn-primary">인원 설정 수정</a>
+            <form action="{{ url_for('auto_schedule', id=roster.id) }}" method="POST" style="display: inline;">
+                <button type="submit" class="btn btn-primary">자동 배정</button>
+            </form>
+            {% endif %}
+            <a href="{{ url_for('roster_list') }}" class="btn btn-secondary">목록으로</a>
+        </div>
+    </div>
+
+
+    <!-- Personnel Summary -->
+    <div
+        style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+        <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+            <!-- Unassigned -->
+            <div style="flex: 1; min-width: 250px;">
+                <h4
+                    style="margin: 0 0 10px 0; color: #b45309; font-size: 0.95rem; display: flex; align-items: center; gap: 5px;">
+                    <span
+                        style="display: inline-block; width: 8px; height: 8px; background: #f59e0b; border-radius: 50%;"></span>
+                    미배정 인원 ({{ unassigned_people|length }}명)
+                </h4>
+                {% if unassigned_people %}
+                <div style="display: flex; flex-wrap: wrap; gap: 5px;">
+                    {% for p in unassigned_people %}
+                    <span class="badge" style="background: #fef3c7; color: #92400e; border: 1px solid #fcd34d;">{{
+                        p.name }}</span>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <span style="color: #94a3b8; font-size: 0.85rem;">모든 인원이 배정되었습니다.</span>
+                {% endif %}
+            </div>
+
+            <!-- Excluded -->
+            <div style="flex: 1; min-width: 250px;">
+                <h4
+                    style="margin: 0 0 10px 0; color: #64748b; font-size: 0.95rem; display: flex; align-items: center; gap: 5px;">
+                    <span
+                        style="display: inline-block; width: 8px; height: 8px; background: #94a3b8; border-radius: 50%;"></span>
+                    제외된 인원 ({{ excluded_people|length }}명)
+                </h4>
+                {% if excluded_people %}
+                <div style="display: flex; flex-wrap: wrap; gap: 5px;">
+                    {% for p in excluded_people %}
+                    <span class="badge"
+                        style="background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; text-decoration: line-through;">{{
+                        p.name }}</span>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <span style="color: #94a3b8; font-size: 0.85rem;">제외된 인원이 없습니다.</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="roster-board">
+        <!-- People List (Click to Select) -->
+        <div class="person-list">
+            <h3>인원 목록</h3>
+            {% if current_user.role == 'admin' %}
+            <p class="text-muted" style="font-size: 0.8rem; margin-bottom: 10px;">인원을 선택 후 시간대를 클릭하세요</p>
+            {% for person in people %}
+            <div class="person-card" onclick="selectPerson(this, '{{ person.id }}')" data-id="{{ person.id }}">
+                <strong>{{ person.name }}</strong>
+                <div style="font-size: 0.8rem; color: #64748b;">
+                    근무: {{ person.stats_hours }}시간
+                </div>
+            </div>
+            {% endfor %}
+            {% else %}
+            <!-- Read-only person list for non-admins -->
+            <p class="text-muted" style="font-size: 0.8rem; margin-bottom: 10px;">(읽기 전용)</p>
+            {% for person in people %}
+            <div class="person-card" data-id="{{ person.id }}">
+                <strong>{{ person.name }}</strong>
+                <div style="font-size: 0.8rem; color: #64748b;">
+                    근무: {{ person.stats_hours }}시간
+                </div>
+            </div>
+            {% endfor %}
+            {% endif %}
+        </div>
+
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 20px;">
+
+            <!-- Tab Navigation -->
+            <div class="tab-nav">
+                <button class="tab-btn active" onclick="openTab('count')">인원 현황</button>
+                <button class="tab-btn" onclick="openTab('names')">편성 명단</button>
+                <button class="tab-btn" onclick="openTab('personal')">개인별 근무표</button>
+                <button class="tab-btn" onclick="openTab('availability')">가능 인원 현황</button>
+            </div>
+
+            <!-- ... Count and Names tabs ... -->
+
+            <!-- Personal Schedule View (New) -->
+            <!-- Personal Schedule View (New) -->
+            <div id="tab-personal" class="tab-content">
+                <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px;">
+
+                    <!-- Person Selector -->
+                    <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                        <label for="personal-select" style="font-weight: bold; color: #334155;">인원 선택:</label>
+                        <select id="personal-select" onchange="renderPersonalSchedule(this.value)"
+                            style="padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 1rem; min-width: 200px;">
+                            <option value="">-- 인원을 선택하세요 --</option>
+                            {% for person in people %}
+                            <option value="{{ person.id }}">{{ person.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Personal Timetable Grid -->
+                    <div id="personal-schedule-view" style="display: none; overflow-x: auto;">
+                        <h3 id="personal-name-display" style="margin-bottom: 15px; color: #0f172a;"></h3>
+                        <table class="roster-table" style="width: 100%; border-collapse: collapse; min-width: 800px;">
+                            <thead>
+                                <tr>
+                                    <th style="width: 60px; background: #f8fafc; border: 1px solid #e2e8f0;">Time</th>
+                                    {% for day in days %}
+                                    {% set day_names = ['월', '화', '수', '목', '금', '토', '일'] %}
+                                    <th
+                                        style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 8px; text-align: center;">
+                                        {{ day.strftime('%m/%d') }} ({{ day_names[day.weekday()] }})
+                                    </th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for hour in range(6, 25) %}
+                                <tr>
+                                    <td
+                                        style="text-align: center; font-size: 0.8rem; color: #64748b; border: 1px solid #e2e8f0; padding: 4px; background: #f8fafc;">
+                                        {{ hour }}:00
+                                    </td>
+                                    {% for day in days %}
+                                    {% set date_str = day.strftime('%Y-%m-%d') %}
+                                    <!-- Give cells IDs for easy JS access: personal-cell-DATE-HOUR -->
+                                    <td id="personal-cell-{{ date_str }}-{{ hour }}"
+                                        style="border: 1px solid #e2e8f0; padding: 0; vertical-align: middle; height: 40px; text-align: center;">
+                                    </td>
+                                    {% endfor %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Availability Overview -->
+
+            <!-- Count View (Original) -->
+            <div id="tab-count" class="tab-content active">
+                <div style="overflow-x: auto;">
+                    <table class="roster-table" style="width: 100%; border-collapse: collapse; min-width: 800px;">
+                        <thead>
+                            <tr>
+                                <th style="width: 60px; background: #f8fafc; border: 1px solid #e2e8f0;">Time</th>
+                                {% for day in days %}
+                                {% set day_names = ['월', '화', '수', '목', '금', '토', '일'] %}
+                                <th
+                                    style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 8px; text-align: center;">
+                                    {{ day.strftime('%m/%d') }} ({{ day_names[day.weekday()] }})
+                                </th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for hour in range(6, 25) %}
+                            <tr>
+                                <td
+                                    style="text-align: center; font-size: 0.8rem; color: #64748b; border: 1px solid #e2e8f0; padding: 4px;">
+                                    {{ hour }}:00
+                                </td>
+                                {% for day in days %}
+                                {% set duty_list = duty_map.get((day, hour), []) %}
+                                {% set date_str = day.strftime('%Y-%m-%d') %}
+                                {% if current_user.role == 'admin' %}
+                                <td class="drop-zone" onclick="assignDuty('{{ date_str }}', '{{ hour }}')"
+                                    style="border: 1px solid #e2e8f0; padding: 0; height: 30px; min-height: 0; cursor: pointer; position: relative;">
+                                    {% else %}
+                                <td class="drop-zone"
+                                    style="border: 1px solid #e2e8f0; padding: 0; height: 30px; min-height: 0; position: relative;">
+                                    {% endif %}
+
+                                    {% if duty_list %}
+                                    <div class="duty-cell-content"
+                                        style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #e0f2fe; color: #0369a1; font-weight: bold; font-size: 0.8rem;">
+                                        {{ duty_list|length }}명
+                                    </div>
+                                    {% endif %}
+
+                                    {% if current_user.role == 'admin' %}
+                                    <!-- Hover Tooltip (Admin Only) -->
+                                    <div class="duty-tooltip"
+                                        style="display: none; position: absolute; z-index: 100; background: white; border: 1px solid #cbd5e1; border-radius: 4px; padding: 5px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); width: 150px; left: 50%; transform: translateX(-50%); top: 100%;">
+                                        {% for duty in duty_list %}
+                                        {% if duty.person %}
+                                        {% set colors = person_colors.get(duty.person.id, ('#e2e8f0', '#64748b')) %}
+                                        <div class="duty-item"
+                                            style="--bg-color: {{ colors[0] }}; --text-color: {{ colors[1] }};">
+                                            <span>{{ duty.person.name }}</span>
+                                            <button
+                                                onclick="removeDuty('{{ date_str }}', '{{ hour }}', '{{ duty.person.id }}', event)"
+                                                class="remove-btn">×</button>
+                                        </div>
+                                        {% else %}
+                                        <div class="duty-item"
+                                            style="--bg-color: #f1f5f9; --text-color: #94a3b8; border: 1px dashed #cbd5e1;">
+                                            <span style="font-style: italic;">(미배정)</span>
+                                        </div>
+                                        {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
+
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Names View (New) -->
+            <div id="tab-names" class="tab-content">
+                <div style="margin-bottom: 10px; display: flex; align-items: center; gap: 10px;">
+                    <label for="roster-filter" style="font-weight: bold; color: #334155;">인원 필터:</label>
+                    <select id="roster-filter" onchange="filterRoster(this.value)"
+                        style="padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.9rem;">
+                        <option value="">전체 보기</option>
+                        {% for person in people %}
+                        <option value="{{ person.id }}">{{ person.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div style="overflow-x: auto;">
+                    <table class="roster-table" style="width: 100%; border-collapse: collapse; min-width: 800px;">
+                        <thead>
+                            <tr>
+                                <th style="width: 60px; background: #f8fafc; border: 1px solid #e2e8f0;">Time</th>
+                                {% for day in days %}
+                                {% set day_names = ['월', '화', '수', '목', '금', '토', '일'] %}
+                                <th
+                                    style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 8px; text-align: center;">
+                                    {{ day.strftime('%m/%d') }} ({{ day_names[day.weekday()] }})
+                                </th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for hour in range(6, 25) %}
+                            <tr>
+                                <td
+                                    style="text-align: center; font-size: 0.8rem; color: #64748b; border: 1px solid #e2e8f0; padding: 4px; background: #f8fafc;">
+                                    {{ hour }}:00
+                                </td>
+                                {% for day in days %}
+                                {% set date_str = day.strftime('%Y-%m-%d') %}
+                                {% set duty_list = duty_map.get((day, hour), []) %}
+
+                                <td style="border: 1px solid #e2e8f0; padding: 4px; vertical-align: top; height: 50px;">
+                                    <!-- Directly showing list -->
+                                    {% if duty_list %}
+                                    <div style="display: flex; flex-direction: column; gap: 2px;">
+                                        {% for duty in duty_list %}
+                                        {% if duty.person %}
+                                        {% set colors = person_colors.get(duty.person.id, ('#e2e8f0', '#64748b')) %}
+                                        <div class="duty-item" data-person-id="{{ duty.person.id }}"
+                                            style="--bg-color: {{ colors[0] }}; --text-color: {{ colors[1] }};">
+                                            <span>{{ duty.person.name }}</span>
+                                            {% if current_user.role == 'admin' %}
+                                            <button
+                                                onclick="removeDuty('{{ date_str }}', '{{ hour }}', '{{ duty.person.id }}', event)"
+                                                class="remove-btn">×</button>
+                                            {% endif %}
+                                        </div>
+                                        {% else %}
+                                        <!-- Unassigned slot -->
+                                        {% if current_user.role == 'admin' %}
+                                        <div class="duty-item"
+                                            onclick="assignDuty('{{ date_str }}', '{{ hour }}', event)"
+                                            style="--bg-color: #f1f5f9; --text-color: #94a3b8; border: 1px dashed #cbd5e1; cursor: pointer;">
+                                            <span style="font-style: italic;">(미배정)</span>
+                                        </div>
+                                        {% else %}
+                                        <div class="duty-item"
+                                            style="--bg-color: #f1f5f9; --text-color: #94a3b8; border: 1px dashed #cbd5e1;">
+                                            <span style="font-style: italic;">(미배정)</span>
+                                        </div>
+                                        {% endif %}
+
+                                        {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Availability Overview -->
+            <div id="tab-availability" class="tab-content">
+                <div style="overflow-x: auto;">
+                    <table class="roster-table" style="width: 100%; border-collapse: collapse; min-width: 800px;">
+                        <thead>
+                            <tr>
+                                <th style="width: 60px; background: #f8fafc; border: 1px solid #e2e8f0;">Time</th>
+                                {% for day in days %}
+                                {% set day_names = ['월', '화', '수', '목', '금', '토', '일'] %}
+                                <th
+                                    style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 8px; text-align: center;">
+                                    {{ day.strftime('%m/%d') }} ({{ day_names[day.weekday()] }})
+                                </th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for hour in range(6, 25) %}
+                            <tr>
+                                <td
+                                    style="text-align: center; font-size: 0.8rem; color: #64748b; border: 1px solid #e2e8f0; padding: 4px;">
+                                    {{ hour }}:00
+                                </td>
+                                {% for day in days %}
+                                {% set day_grid = availability_map.get(day, {}) %}
+                                {% set infos = day_grid.get(hour, []) %}
+                                <td style="border: 1px solid #e2e8f0; padding: 4px; vertical-align: top; height: 40px;">
+                                    {% if infos %}
+                                    <div style="display: flex; flex-wrap: wrap; gap: 2px;">
+                                        {% for info in infos %}
+                                        <span
+                                            style="--bg: {{ info.bg }}; --text: {{ info.text }}; background: var(--bg); color: var(--text); font-size: 0.75rem; padding: 2px 4px; border-radius: 2px; white-space: nowrap;">
+                                            {{ info.name }}
+                                        </span>
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+
+<style>
+    /* Unified Button Styles */
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+        font-weight: 500;
+        line-height: 1.5;
+        border-radius: 0.375rem;
+        vertical-align: middle;
+        text-decoration: none;
+        transition: color 0.15s, background-color 0.15s, border-color 0.15s;
+        height: 38px;
+        /* Fixed height for uniformity */
+        box-sizing: border-box;
+        border: 1px solid transparent;
+        cursor: pointer;
+    }
+
+    .btn-primary {
+        background-color: #3b82f6;
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background-color: #2563eb;
+    }
+
+    .btn-secondary {
+        background-color: #e2e8f0;
+        color: #1e293b;
+    }
+
+    .btn-secondary:hover {
+        background-color: #cbd5e1;
+    }
+
+
+    .drop-zone:hover .duty-tooltip,
+    .drop-zone.locked .duty-tooltip {
+        display: block !important;
+    }
+
+    .drop-zone:hover .duty-tooltip,
+    .drop-zone.locked .duty-tooltip {
+        display: block !important;
+    }
+
+    .duty-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2px;
+        padding: 2px;
+        background: var(--bg-color);
+        color: var(--text-color);
+        border-radius: 2px;
+        font-size: 0.75rem;
+    }
+
+    .remove-btn {
+        border: none;
+        background: none;
+        cursor: pointer;
+        color: inherit;
+        font-weight: bold;
+        line-height: 1;
+    }
+</style>
+
+
+<script type="application/json" id="duties-data">
+    {{ duties_by_person_json | tojson }}
+</script>
+<script type="application/json" id="unassigned-data">
+    {{ unassigned_duties_json | tojson }}
+</script>
+
+<script>
+    let selectedPersonId = null;
+
+    // Toggle sticky tooltip
+    function toggleTooltip(element, event) {
+        // Prevent triggering when clicking buttons inside
+        if (event.target.closest('button')) return;
+
+        // Remove locked from other zones
+        document.querySelectorAll('.drop-zone.locked').forEach(el => {
+            if (el !== element) el.classList.remove('locked');
+        });
+
+        element.classList.toggle('locked');
+        event.stopPropagation();
+    }
+
+    // Close tooltips when clicking outside
+    document.addEventListener('click', function (event) {
+        if (!event.target.closest('.drop-zone')) {
+            document.querySelectorAll('.drop-zone.locked').forEach(el => {
+                el.classList.remove('locked');
+            });
+        }
+    });
+
+    function openTab(tabName) {
+        document.querySelectorAll('.tab-content').forEach(content => {
+            content.classList.remove('active');
+        });
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.getElementById('tab-' + tabName).classList.add('active');
+
+        const buttons = document.querySelectorAll('.tab-btn');
+        if (tabName === 'count') buttons[0].classList.add('active');
+        if (tabName === 'names') buttons[1].classList.add('active');
+        if (tabName === 'personal') buttons[2].classList.add('active');
+        if (tabName === 'availability') buttons[3].classList.add('active');
+    }
+
+    function selectPerson(element, personId) {
+        if (selectedPersonId === personId) {
+            selectedPersonId = null;
+            element.classList.remove('selected');
+            return;
+        }
+
+        document.querySelectorAll('.person-card').forEach(card => card.classList.remove('selected'));
+
+        selectedPersonId = personId;
+        element.classList.add('selected');
+    }
+
+    async function assignDuty(date, hour, event) {
+        if (event) event.stopPropagation();
+
+        if (!selectedPersonId) {
+            alert('먼저 왼쪽 목록에서 인원을 선택해주세요.');
+            return;
+        }
+
+        await updateDuty(date, hour, selectedPersonId);
+        window.location.reload();
+    }
+
+    async function updateDuty(date, hour, personId, action) {
+        const formData = new FormData();
+        formData.append('date', date);
+        formData.append('hour', hour);
+        if (personId) formData.append('person_id', personId);
+        if (action) formData.append('action', action);
+
+        const response = await fetch("{{ url_for('update_duty', id=roster.id) }}", {
+            method: 'POST',
+            body: formData
+        });
+        return response;
+    }
+
+    async function assignDuty(date, hour, event) {
+        if (event) event.stopPropagation();
+
+        if (!selectedPersonId) {
+            alert('먼저 왼쪽 목록에서 인원을 선택해주세요.');
+            return;
+        }
+
+        const response = await updateDuty(date, hour, selectedPersonId);
+        if (response.ok) {
+            window.location.reload();
+        } else {
+            const msg = await response.text();
+            alert(msg);
+        }
+    }
+
+    async function removeDuty(date, hour, personId, event) {
+        if (event) event.stopPropagation();
+        if (!confirm('배정을 취소하시겠습니까?')) return;
+        await updateDuty(date, hour, personId, 'remove');
+        window.location.reload();
+    }
+
+    // --- Personal Schedule Logic ---
+
+    // Serialize duties_by_person from backend to JS object
+    // Structure: { person_id: [ {date: "YYYY-MM-DD", hour: H, ...}, ... ] }
+    const allDuties = JSON.parse(document.getElementById('duties-data').textContent);
+    const unassignedDuties = JSON.parse(document.getElementById('unassigned-data').textContent);
+
+    function renderPersonalSchedule(personId) {
+        const container = document.getElementById('personal-schedule-view');
+        const nameDisplay = document.getElementById('personal-name-display');
+        const selectElement = document.getElementById('personal-select');
+
+        // Reset all cells first
+        document.querySelectorAll('[id^="personal-cell-"]').forEach(td => {
+            td.style.backgroundColor = '';
+            td.innerHTML = '';
+            td.className = ''; // Reset classes
+            td.onclick = null; // Reset handlers
+            td.removeAttribute('data-status');
+        });
+
+        if (!personId) {
+            container.style.display = 'none';
+            return;
+        }
+
+        container.style.display = 'block';
+
+        // Set name header
+        const selectedOption = selectElement.options[selectElement.selectedIndex];
+        nameDisplay.textContent = selectedOption.text + ' 님의 근무표';
+
+        // Update global selection for action context
+        selectedPersonId = personId;
+
+        const duties = allDuties[personId] || [];
+
+        // Track working times locally for collision detection
+        const workingTimes = new Set();
+
+        // 1. Render Assigned Duties (Working)
+        duties.forEach(duty => {
+            const cellId = `personal-cell-${duty.date}-${duty.hour}`;
+            const cell = document.getElementById(cellId);
+            if (cell) {
+                workingTimes.add(cellId);
+                cell.style.backgroundColor = '#dbeafe'; // Light blue highlight
+                cell.innerHTML = `
+                    <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #1e40af; font-weight: bold; font-size: 0.9rem;">
+                        근무
+                    </div>
+                `;
+                cell.dataset.status = 'working';
+            }
+        });
+
+        // 2. Render Unassigned Duties (Gaps)
+        unassignedDuties.forEach(duty => {
+            const cellId = `personal-cell-${duty.date}-${duty.hour}`;
+            const cell = document.getElementById(cellId);
+            if (cell) {
+                // If distinct from working slot ? (Wait, if a slot requires 2 people, 
+                // and 1 is assigned (My Duty) and 1 is unassigned, should we show both?
+                // The cell only holds one visual. 
+                // If I am working, "Working" takes precedence visually, but maybe show a badge?
+                // User said "Show where unassigned... even at this time if already scheduled... warning".
+                // Simplest: If I am NOT working, show Unassigned.
+                // If I AM working, keep "Working" but maybe we know there is an unassigned slot there too.
+
+                if (cell.dataset.status === 'working') {
+                    // Person is working, but there is ALSO an unassigned slot here (understaffed).
+                    // Ideally show "Working (+Gap)". 
+                    // But for now let's leave as Working physically.
+                    // The requirement "At this time also if already scheduled... warning" implies interaction.
+                    // If I click, I might be trying to fill the OTHER slot?
+                    // But usually one person cannot fill two slots at same time.
+                    // So showing "Unassigned" might be misleading if they CANNOT fill it.
+                    // Unless the user wants to see "System Gaps" regardless of their status.
+
+                    // Let's add a small marker if needed, or just leave it.
+                    // Interpretation: "Show unassigned where I am NOT working".
+                } else {
+                    // Cell is empty for me -> Show Unassigned
+                    cell.style.border = '2px dashed #cbd5e1';
+                    cell.style.cursor = 'pointer';
+                    cell.innerHTML = `
+                         <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #94a3b8; font-size: 0.8rem; font-style: italic;">
+                            (미배정)
+                        </div>
+                    `;
+                    cell.dataset.status = 'unassigned';
+
+                    // Click to assign (Admin Only ideally, but we restrict backend)
+                    // If General User clicks, backend returns 403 or we check role in JS?
+                    // We don't have role in JS cleanly without injection.
+                    // Assume role check is backend.
+
+                    cell.onclick = function () {
+                        // Check if person is working at this time (already checked by if-else logic here, 
+                        // but what if they are working in ANOTHER roster? No, we only check this roster).
+                        // Wait, "already scheduled at that time".
+                        // If I click "Unassigned" (meaning I was NOT working here), 
+                        // then I try to assign.
+                        // Why would there be a warning "Since you are already scheduled"? 
+                        // I wouldn't be clicking "Unassigned" if I was "Working" (since it would render as Working).
+
+                        // Ah, maybe the user implies: 
+                        // "Show Unassigned even if I AM working?".
+                        // If I am working, and I see "Unassigned" (maybe via badge), and I click it?
+
+                        // Re-reading: "미편성으로 표시되는건... 개인별로 볼때도... 보여주게 하고"
+                        // "이때도 이미 그 시간에 편성되어있으면 경고 메시지"
+
+                        // Revised Logic:
+                        // ALWAYS show indication of unassigned, maybe as a background or separate indicator?
+                        // OR: Just rendering Unassigned in empty cells is enough.
+                        // The warning is for when I try to Assign someone to a slot (via other views?)
+                        // "Personal View" -> If I click "(미배정)", I am trying to assign THIS person to THIS slot.
+                        // If successful -> Refresh.
+                        // If "Already scheduled" (e.g. at a conflicting time that we missed, or maybe backend check): Alert.
+
+                        // Let's proceed with: Click -> assignDuty.
+                        if (confirm('이 인원을 해당 시간에 배정하시겠습니까?')) {
+                            assignDuty(duty.date, duty.hour);
+                            // assignDuty uses selectedPersonId global (which matches the view).
+                        }
+                    };
+                }
+            }
+        });
+    }
+
+    function filterRoster(personId) {
+        const dutyItems = document.querySelectorAll('#tab-names .duty-item');
+
+        // Sync global selection with filter
+        if (personId) {
+            // Find person card and select it
+            const card = document.querySelector(`.person-card[data-id="${personId}"]`);
+            if (card) {
+                // Manually trigger selection logic without clicking (to avoid toggling off if already selected)
+                // Actually, just calling selectPerson is safer if we handle the toggle correctly.
+                // Or just set state directly.
+                document.querySelectorAll('.person-card').forEach(c => c.classList.remove('selected'));
+                card.classList.add('selected');
+                selectedPersonId = personId;
+            }
+        } else {
+            // Clear selection if filter cleared? Maybe not forced, but logical.
+            // selectedPersonId = null;
+            // document.querySelectorAll('.person-card').forEach(c => c.classList.remove('selected'));
+        }
+
+        dutyItems.forEach(item => {
+            if (!personId) {
+                // Show all if no person selected
+                item.style.display = 'flex';
+                return;
+            }
+
+            const itemPersonId = item.getAttribute('data-person-id');
+            // Show if it matches the person OR if it is unassigned (no person-id)
+            if (itemPersonId === personId || !itemPersonId) {
+                item.style.display = 'flex';
+            } else {
+                item.style.display = 'none';
+            }
+        });
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,125 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="card">
+    <h2>인원 시간 관리</h2>
+
+    <div style="margin-bottom: 30px;">
+        <label for="personSelect"><strong>인원 선택:</strong></label>
+        <select id="personSelect" onchange="loadAvailability()" style="padding: 8px; font-size: 1rem; width: 200px;">
+            <option value="">-- 이름 선택 --</option>
+            {% for person in people %}
+            <option value="{{ person.id }}">{{ person.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div id="availabilitySection" style="display: none;">
+        <h3>가능 시간 입력</h3>
+        <p class="text-muted">각 날짜별로 가능한 시간을 입력해주세요 (예: 18:00-22:00). 불가능하면 비워두세요.</p>
+
+        <form id="availabilityForm" onsubmit="saveAvailability(event)">
+            <table class="roster-table">
+                <thead>
+                    <tr>
+                        <th>날짜</th>
+                        <th>요일</th>
+                        <th>행사/근무표</th>
+                        <th>가능 시간</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for date_info in dates %}
+                    <tr>
+                        <td>{{ date_info.date.strftime('%Y-%m-%d') }}</td>
+                        <td>{{ date_info.weekday }}</td>
+                        <td>{{ date_info.roster_title }}</td>
+                        <td>
+                            <input type="text" name="time_{{ date_info.date.strftime('%Y-%m-%d') }}" class="time-input"
+                                placeholder="예: 18:00-22:00" data-date="{{ date_info.date.strftime('%Y-%m-%d') }}"
+                                style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px;">
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" style="text-align: center; padding: 20px;">
+                            등록된 행사/근무표가 없습니다. 먼저 근무표 관리에서 행사를 생성해주세요.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <div style="margin-top: 20px; text-align: right;">
+                <button type="submit" class="btn btn-primary">저장하기</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    async function loadAvailability() {
+        const personId = document.getElementById('personSelect').value;
+        const section = document.getElementById('availabilitySection');
+
+        if (!personId) {
+            section.style.display = 'none';
+            return;
+        }
+
+        section.style.display = 'block';
+
+        // Fetch existing data
+        try {
+            const response = await fetch(`/api/availability/${personId}`);
+            const data = await response.json();
+
+            // Clear all inputs first
+            document.querySelectorAll('.time-input').forEach(input => input.value = '');
+
+            // Fill inputs
+            data.forEach(item => {
+                const input = document.querySelector(`.time-input[data-date="${item.date}"]`);
+                if (input) {
+                    input.value = item.available_time || '';
+                }
+            });
+        } catch (e) {
+            console.error('Error loading data:', e);
+        }
+    }
+
+    async function saveAvailability(e) {
+        e.preventDefault();
+        const personId = document.getElementById('personSelect').value;
+        if (!personId) return;
+
+        const inputs = document.querySelectorAll('.time-input');
+        const updates = [];
+
+        inputs.forEach(input => {
+            updates.push({
+                date: input.dataset.date,
+                available_time: input.value
+            });
+        });
+
+        try {
+            const response = await fetch(`/api/availability/${personId}/batch`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ updates })
+            });
+
+            if (response.ok) {
+                alert('저장되었습니다.');
+            } else {
+                alert('저장 실패');
+            }
+        } catch (e) {
+            console.error('Error saving:', e);
+            alert('저장 중 오류가 발생했습니다.');
+        }
+    }
+</script>
+{% endblock %}
