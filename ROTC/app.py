@@ -2,54 +2,39 @@ import os
 import logging
 import hashlib
 import random
-import json
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request, redirect, url_for, jsonify, flash
+from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 
-# 별도의 models.py 파일에 정의된 객체들을 가져옵니다.
+# models.py에서 정의한 객체들
 from models import db, Person, WeeklyAvailability, Roster, Duty, RosterSlot
 
 app = Flask(__name__)
 
-# --- [설정] 데이터베이스 및 보안 설정 ---
-# 1. DB 주소 설정: Render 환경변수가 있으면 사용, 없으면 로컬 SQLite 사용
-db_url = os.environ.get('DATABASE_URL')
-if db_url and db_url.startswith("postgres://"):
-    # SQLAlchemy 1.4+ 버전 호환성을 위해 프로토콜 이름 변경
-    db_url = db_url.replace("postgres://", "postgresql://", 1)
+# --- [1. 데이터베이스 설정] ---
+# 환경 변수에서 주소를 가져와 바로 설정을 먹입니다. (불필요한 변수 선언 최적화)
+raw_db_url = os.environ.get('DATABASE_URL')
+if raw_db_url and raw_db_url.startswith("postgres://"):
+    raw_db_url = raw_db_url.replace("postgres://", "postgresql://", 1)
 
-app.config['SQLALCHEMY_DATABASE_URI'] = db_url or 'sqlite:///roster.db'
+# 이 줄이 Flask-SQLAlchemy에게 "이 주소로 접속해!"라고 명령하는 핵심 줄입니다.
+app.config['SQLALCHEMY_DATABASE_URI'] = raw_db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-# 2. 시크릿 키: 배포 환경에서는 환경변수 사용 권장
-app.secret_key = os.environ.get('SECRET_KEY', 'dev_key')
+app.secret_key = os.environ.get('SECRET_KEY', 'secure_roster_2026')
 
-# --- [설정] 로깅 ---
-logging.basicConfig(filename='error_log.txt', level=logging.ERROR, 
-                    format='%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]')
-
-# --- [설정] Flask-Login 및 DB 초기화 ---
+# --- [2. 서비스 초기화] ---
 db.init_app(app)
-
-login_manager = LoginManager()
-login_manager.init_app(app)
+login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
 @login_manager.user_loader
 def load_user(user_id):
     return Person.query.get(int(user_id))
 
-# 앱 컨텍스트 내에서 테이블 생성
 with app.app_context():
     db.create_all()
 
-# --- [Global Error Handler] ---
-@app.errorhandler(Exception)
-def handle_exception(e):
-    app.logger.error(f"Unhandled Exception: {e}", exc_info=True)
-    return f"Internal Server Error: {e}", 500
-
-# --- [Helper Functions] ---
+# --- [3. 26가지 고유 색상 팔레트] ---
 COLOR_PALETTE = [
     ('#fee2e2', '#991b1b'), ('#ffedd5', '#9a3412'), ('#fef9c3', '#854d0e'),
     ('#ecfccb', '#3f6212'), ('#dcfce7', '#166534'), ('#d1fae5', '#065f46'),
@@ -64,37 +49,93 @@ COLOR_PALETTE = [
 
 def get_color(index):
     if isinstance(index, str):
-        return get_color(int(hashlib.md5(index.encode()).hexdigest(), 16))
+        index = int(hashlib.md5(index.encode()).hexdigest(), 16)
     return COLOR_PALETTE[index % len(COLOR_PALETTE)]
 
-# --- [Routes: 기본 및 인증] ---
-@app.route('/')
-def index():
-    return redirect(url_for('roster_list'))
-
+# --- [4. 인증 라우트] ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        user = Person.query.filter_by(username=username).first()
-        if user and user.check_password(password):
+        user = Person.query.filter_by(username=request.form.get('username')).first()
+        if user and user.check_password(request.form.get('password')):
             login_user(user)
-            return redirect(url_for('index'))
-        flash('Invalid username or password')
+            return redirect(url_for('roster_list'))
+        flash('로그인 실패')
     return render_template('login.html')
 
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        name = request.form.get('name')
-        if Person.query.filter_by(username=username).first():
-            flash('Username already exists')
+        if Person.query.filter_by(username=request.form.get('username')).first():
+            flash('아이디 중복')
             return redirect(url_for('signup'))
-        is_first = Person.query.count() == 0
-        role = 'admin' if is_first else 'user'
-        new_user = Person(username=username, name=name, role=role)
-        new_user.set_password(password)
-        db
+        new_user = Person(username=request.form.get('username'), 
+                          name=request.form.get('name'), 
+                          role='admin' if Person.query.count() == 0 else 'user')
+        new_user.set_password(request.form.get('password'))
+        db.session.add(new_user)
+        db.session.commit()
+        login_user(new_user)
+        return redirect(url_for('roster_list'))
+    return render_template('signup.html')
+
+@app.route('/logout')
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
+
+# --- [5. 근무표 및 인원 관리] ---
+@app.route('/')
+@app.route('/rosters')
+def roster_list():
+    rosters = Roster.query.order_by(Roster.start_date.desc()).all()
+    return render_template('roster_list.html', rosters=rosters)
+
+@app.route('/rosters/<int:id>')
+def roster_detail(id):
+    roster = Roster.query.get_or_404(id)
+    days = [roster.start_date + timedelta(days=i) for i in range((roster.end_date - roster.start_date).days + 1)]
+    duty_map = {}
+    for d in Duty.query.filter_by(roster_id=id).all():
+        duty_map.setdefault((d.date, d.hour), []).append(d)
+    all_people = Person.query.order_by(Person.name).all()
+    colors = {p.id: get_color(idx) for idx, p in enumerate(all_people)}
+    return render_template('roster_detail.html', roster=roster, days=days, duty_map=duty_map, 
+                           people=[p for p in all_people if p.is_active], person_colors=colors)
+
+@app.route('/rosters/<int:id>/auto_schedule', methods=['POST'])
+@login_required
+def auto_schedule(id):
+    if current_user.role != 'admin': return "Admin Only", 403
+    roster = Roster.query.get_or_404(id)
+    Duty.query.filter_by(roster_id=id).delete()
+    people = Person.query.filter_by(is_active=True).all()
+    duty_counts = {p.id: Duty.query.filter_by(person_id=p.id).count() for p in people}
+    
+    curr = roster.start_date
+    while curr <= roster.end_date:
+        weekday = curr.weekday()
+        prev_hour_ids = set()
+        for hour in range(6, 25):
+            candidates = [p for p in people if (avail := WeeklyAvailability.query.filter_by(person_id=p.id, day_of_week=weekday).first()) 
+                          and avail.available_time and str(hour) in avail.available_time.split(',')]
+            target = roster.people_per_shift or 1
+            scored = sorted([(duty_counts[p.id] - (1000 if p.id in prev_hour_ids else 0), p) for p in candidates], key=lambda x: x[0])
+            selected = scored[:target]
+            curr_hour_ids = set()
+            for _, p in selected:
+                db.session.add(Duty(roster_id=id, date=curr, hour=hour, person_id=p.id))
+                duty_counts[p.id] += 1
+                curr_hour_ids.add(p.id)
+            for _ in range(target - len(selected)):
+                db.session.add(Duty(roster_id=id, date=curr, hour=hour, person_id=None))
+            prev_hour_ids = curr_hour_ids
+        curr += timedelta(days=1)
+    db.session.commit()
+    return redirect(url_for('roster_detail', id=id))
+
+# --- [6. 실행 (Render 환경)] ---
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
+
